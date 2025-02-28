@@ -1,0 +1,28 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+  pre_build:
+    commands:
+      # instalar dependencias y sframework serverless
+      - npm run install
+      - npm install --global --unsafe-perm serverless
+  build: 
+    commands:
+      # Eliminar endpoint local de dynamo
+      - sed -i -e '6,7d' serverless/common/dynamodb/index.js
+      # Eliminar endpoint local de s3
+      - sed -i -e '6,8d' serverless/common/s3-functions/index.js
+      # Asignar stage/environment de compilado
+      - sed -i -e "s|currentStage\:.*|currentStage\:\ dev|g" serverless/serverless.yml
+      - npm run configure:serverless
+      - npm run deploy:serverless
+      - cd serverless
+      # Obtener endpoint de API Gateway
+      - export APIId="https://$(serverless info -v | grep "ApiGatewayRestApiId:" | sed "s/ApiGatewayRestApiId:\ //g").execute-api.$(serverless info -v | grep "region:" | sed "s/region:\ //g").amazonaws.com/dev"
+      - echo $APIId
+      - cd ../
+      - sed -i -e "s|http\:\/\/localhost:3000|$APIId|g" client/src/main.js
+      - npm run build:client
+      - npm run deploy:client
